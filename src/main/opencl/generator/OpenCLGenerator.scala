@@ -512,7 +512,7 @@ class OpenCLGenerator extends Generator {
     nestedBlock += OpenCLAST.Barrier(OpenCLMemory(workVar, 4, LocalMemory))
     // get the loop variable as a range variable
     val range = loopVar.range.asInstanceOf[RangeAdd]
-    // generate a while loop which increments the task index atomically, while 
+    // generate a while loop which increments the task index atomically, while
     // it's less than the maximum range of the loop variable
     generateWhileLoop(nestedBlock,
       Predicate(loopVar, range.stop, Predicate.Operator.<),
@@ -538,7 +538,7 @@ class OpenCLGenerator extends Generator {
       (block: Block) += OpenCLAST.Barrier(call.mem.asInstanceOf[OpenCLMemory])
   }
 
-  // MapAtomLcl 
+  // MapAtomLcl
   private def generateMapAtomLclCall(m: MapAtomLcl,
                                      call: FunCall,
                                      block: Block): Unit = {
@@ -565,7 +565,7 @@ class OpenCLGenerator extends Generator {
     // get the loop variable as a range variable
     val range = loopVar.range.asInstanceOf[RangeAdd]
 
-    // generate a while loop which increments the task index atomically, while 
+    // generate a while loop which increments the task index atomically, while
     // it's less than the maximum range of the loop variable
     generateWhileLoop(nestedBlock,
       Predicate(loopVar, range.stop, Predicate.Operator.<),
@@ -655,8 +655,8 @@ class OpenCLGenerator extends Generator {
   }
 
   // === ReduceWhile ===
-  private def generateReduceWhileCall(r: ReduceWhileSeq, 
-                                      call: FunCall, 
+  private def generateReduceWhileCall(r: ReduceWhileSeq,
+                                      call: FunCall,
                                       block: Block) : Unit = {
     val innerBlock = OpenCLAST.Block(Vector.empty)
     (block: Block) += OpenCLAST.Comment("reduce_while_seq")
@@ -1363,6 +1363,8 @@ class OpenCLGenerator extends Generator {
         }
     }
   }
+
+
 
   /**
     * Create an access node(i.e. of type VarRef) for variable v based on the

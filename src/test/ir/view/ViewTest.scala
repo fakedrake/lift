@@ -111,6 +111,18 @@ class ViewTest {
     val v = Var()
     assertEquals(VarRef(v, null, ArithExpression(2*var_i + var_j)), ViewPrinter.emit(v, split2A_i_j))
   }
+  @Test
+  def testSlice(): Unit = {
+    val A = View(ArrayType(Int, 8), "A")
+
+    // get(4,A) == get(2,(slice(2,8,A)))
+    val slice_s_e = A.slice(2,8).access(2)
+
+    val v = Var()
+    assertEquals(1,2)
+    assertEquals(VarRef(v, null, ArithExpression(Cst(4))),
+      ViewPrinter.emit(v, slice_s_e))
+  }
 
   @Test
   def testReorder(): Unit = {

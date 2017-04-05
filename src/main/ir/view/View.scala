@@ -59,6 +59,7 @@ abstract class View(val t: Type = UndefType) {
       case component: ViewTupleComponent => ViewTupleComponent(component.i, component.iv.replaced(subst), t)
       case slide: ViewSlide => ViewSlide(slide.iv.replaced(subst), slide.slide, slide.t)
       case pad: ViewPad => ViewPad(pad.iv.replaced(subst), pad.left, pad.right, pad.fct, t)
+      case rng: ViewSlice => ViewSlice(rng.iv.replaced(subst), rng.start, rng.end, t)
       case _ => this
     }
   }
@@ -215,6 +216,12 @@ abstract class View(val t: Type = UndefType) {
       case ArrayType(elemT, len) =>
         ViewPad(this, left, right, boundary, ArrayType(elemT, len + left + right))
       case other => throw new IllegalArgumentException("Can't pad " + other)
+    }
+  }
+  def slice (start: ArithExpr, end: ArithExpr): View = {
+    t match {
+      case ArrayType(elemT, len) => ViewSlice(this, start, end, ArrayType(elemT, end - start))
+      case other => throw new IllegalArgumentException("Can't get slice of " + other)
     }
   }
 
@@ -380,6 +387,15 @@ private[view] case class ViewTail(iv: View, override val t: Type) extends View(t
 private[view] case class ViewPad(iv: View, left: Int, right: Int, fct: Pad.BoundaryFun,
                    override val t: Type) extends View(t)
 
+/**
+  * A view for a range within the view
+  *
+  * @param iv The view to get the range of.
+  * @param start The lower bound of the range
+  * @param end The upper bound of the range
+  * @param t The type of view.
+  */
+private[view] case class ViewSlice(iv: View, start: ArithExpr, end: ArithExpr, override val t: Type) extends View(t)
 
 /**
  * Placeholder for a view that is not yet created.
@@ -535,6 +551,12 @@ class ViewPrinter(val replacements: immutable.Map[ArithExpr, ArithExpr]) {
         val newAAS = (newIdx, newLen) :: stack
         emitView(v, tail.iv, newAAS, tupleAccessStack)
 
+      case slice: ViewSlice =>
+        val idx = arrayAccessStack.head
+        val stack = arrayAccessStack.tail
+        val newAAS = (idx._1 + slice.start, idx._2) :: stack
+        emitView(v, slice.iv, newAAS, tupleAccessStack)
+
       case ag: ViewSlide =>
         val outerId = arrayAccessStack.head
         val stack1 = arrayAccessStack.tail
@@ -686,5 +708,3 @@ object ViewPrinter {
     }
   }
 }
-
-

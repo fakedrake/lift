@@ -1,0 +1,201 @@
+#+TITLE:       Creating a lift primitive
+#+AUTHOR:      Chris Perivolaropoulos
+#+EMAIL:       c.perivol@ed.ac.uk
+#+DESCRIPTION:
+#+KEYWORDS:
+#+LANGUAGE:    en
+#+OPTIONS:     H:2 num:t toc:t \n:nil @:t ::t |:t ^:t f:t TeX:t
+#+STARTUP:     showall
+
+This text demonstrates how you can add a new view primitive to
+lift. Specifically you will teach lift how to deal with slices of
+views (ie lazy structures over arrays).
+
+#+BEGIN_SRC scala
+    slice(start, end, sequence)
+#+END_SRC
+
+This involves the following:
+
+- Views are arranged on a stack over the underlying array. Making a
+  special view that represents a slice of it's argument.
+- Making an AST node type for the slice primitive
+- Informing the system about how to transform the slice AST node to
+  a slice view.
+
+* The method
+
+  In the [[./src/main/ir/view/View.scala][View.scala]] file create a new subtype of the View class
+
+  #+BEGIN_SRC scala
+    /**
+      * A view for a slice within the view
+      *
+      * @param start The lower bound of the slice
+      * @param end The upper bound of the slice
+      * @param t The type of view.
+      */
+    private[view] case class ViewSlice(start: ArithExpr, end: ArithExpr, override val t: Type) extends View(t)
+  #+END_SRC
+
+  Then tell the ~ViewPrinter~ class how to print your view. You can
+  do that by adding a case to the ~emitView~ method. The goal here is
+  from an access call to a view (haskell's ~!!~) to derive the
+  position that this access refers to for the array. The bottom of
+  ~arrayAccessStack~ is the top level access request and new ~(addr,
+  len)~ pairs are pushed on it as layers of indirection are
+  dismantled. So here is our ~ViewSlice~:
+
+  #+BEGIN_SRC scala
+    case slice: ViewSlice =>
+      val idx = arrayAccessStack.head
+      val stack = arrayAccessStack.tail
+      val newAAS = (idx._1 + slice.start, idx._2) :: stack
+      emitView(v, slice.iv, newAAS, tupleAccessStack)
+  #+END_SRC
+
+  And in the ~View~ abstract class we define a method for
+  constructing our view type
+
+  #+BEGIN_SRC scala
+    def slice (start: ArithExpr, end: ArithExpr): View = {
+      t match {
+        case ArrayType(elemT, len) => ViewSlice(this, start, end, ArrayType(elemT, end - start))
+        case other => throw new IllegalArgumentException("Can't get slice of " + other)
+      }
+    }
+  #+END_SRC
+
+  Finally you need to tell the ~View~ how to make variable
+  substitutions. Go to ~View.replace~ and add another case:
+
+  #+BEGIN_SRC scala
+    case rng: ViewSlice => ViewSlice(rng.iv.replaced(subst), rng.start, rng.end, t)
+  #+END_SRC
+
+* Create an [[file:./src/main/ir/ast/DrNinjaBatman.scala][AST]] case class
+
+  Each AST node is it's own case class. The most common one looks
+  like this:
+
+  #+BEGIN_SRC scala
+    case class Zip(n : Int) extends Pattern(arity = n) with isGenerable {
+      override def checkType(argType: Type, setType: Boolean): Type = {
+        //...
+      }
+
+      override def eval(valueMap: ValueMap, args: Any*): Vector[_] {
+        // ...
+      }
+    }
+  #+END_SRC
+
+  or if it's higher order
+
+  #+BEGIN_SRC scala
+    case class MyMap(override val f: Lambda) extends FPattern {
+      // ...
+    }
+  #+END_SRC
+
+  ~isGenerable~ tells you wheteher we can generate this object
+  directly and ~FPattern~ means that it is higher order.
+
+  And then create the actual AST node in it's own file
+  ~src/main/ir/ast/Slice.scala~.
+
+  #+BEGIN_SRC scala
+    package ir.ast
+    import lift.arithmetic.ArithExpr
+    import ir.interpreter.Interpreter.ValueMap
+    import ir.{ArrayType, Type, TypeException, UndefType}
+
+    case class Slice(start: ArithExpr, end: ArithExpr)
+        extends Pattern(arity = 1) with isGenerable {
+      override def toString: String = "Slice(" + end + "," + end + ")"
+      override def checkType(argType: Type, setType: Boolean): Type = {
+        argType match {
+          //todo @bastian include comment again, issue with pad2d(a,b, 0,0)
+          case ArrayType(t, n) /*if (0 <= s <= e < len)*/ => ArrayType(t, end - start)
+          case _ => throw new TypeException(argType, "ArrayType")
+        }
+      }
+      override def eval(valueMap: ValueMap, args: Any*): Any = {
+        assert(args.length == arity)
+        args.head match {
+          case a: Array[_] => a.slice(start.eval,end.eval)
+        }
+      }
+    }
+  #+END_SRC
+
+  ~checkType~ performs a typecheck. There seem to be 5 runtime types
+  that are [[/Users/drninjabatman/Projects/UoE/lift/src/main/ir/Type.scala][available]] in lift:
+
+  - ~NoType~
+  - ~UndefType~
+  - ~ScalarType~
+  - ~ArrayType~
+  - ~VectorType~
+  - ~TupleType~
+
+  Scala is the metalanguage and therefore scala types are not to be
+  considered lift types.
+
+  Now for our special case of building ~Slice~ we can
+
+* IRNode
+
+  Now we need to teach the IR node how to deal with our ~Split~ note
+  type. Both overloadings of ~IRNode.visit()~ function about your new
+  AST node type and tell ~visitArithExpr~ how to traverse the
+  ~ArithExpr~ in your AST node:
+
+  #+BEGIN_SRC scala
+    case s: Slice => new Slice(f(s.start), f(s.end))
+  #+END_SRC
+
+
+* Input View
+
+  The ~InputView~ singleton traverses the AST and builds views. We
+  need to tell it how to map our AST type to our View type. In
+  ~buildViewFunCall~ add an extra case:
+
+  #+BEGIN_SRC scala
+    case Slice(start, end) => buildViewSlice(start, end, argView)
+  #+END_SRC
+
+  and don't forget to define:
+
+  #+BEGIN_SRC scala
+    private def buildViewSlice(start: ArithExpr, end: ArithExpr, argView: View): View  = {
+      argView.slice(start,end)
+    }
+  #+END_SRC
+
+* Testing
+
+  Now everything is in order and we should be able to test our
+  code. In [[./src/test/ir/view/ViewTest.scala][ViewTest.scala]] we add the following test method:
+
+  #+BEGIN_SRC scala
+    @Test
+    def testSlice(): Unit = {
+      val A = View(ArrayType(Int, 8), "A")
+
+      // get(4,A) == get(2,(slice(2,8,A)))
+      val slice_s_e = A.slice(2,8).access(2)
+
+      val v = Var()
+      assertEquals(VarRef(v, null, ArithExpression(Cst(4))),
+        ViewPrinter.emit(v, slice_s_e))
+    }
+  #+END_SRC
+
+  Testing takes a while so to test just this you can /(not at the time
+  of writing but in theory)/:
+
+  #+BEGIN_SRC shell
+    $ sbt test-only ir.view.ViewTest
+  #+END_SRC

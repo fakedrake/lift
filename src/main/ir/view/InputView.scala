@@ -78,6 +78,7 @@ object InputView {
       case uaa: UnsafeArrayAccess => buildViewUnsafeArrayAccess(uaa, call, argView)
       case fp: FPattern => buildViewLambda(fp.f, call, argView)
       case Pad(left, right,boundary) => buildViewPad(left, right, boundary, argView)
+      case Slice(start, end) => buildViewSlice(start, end, argView)
       case ArrayAccess(i) => argView.access(i)
       case _ => argView
     }
@@ -239,5 +240,9 @@ object InputView {
 
   private def buildViewPad(left: Int, right: Int, boundary: Pad.BoundaryFun, argView: View) : View = {
     argView.pad(left, right, boundary)
+  }
+
+  private def buildViewSlice(start: ArithExpr, end: ArithExpr, argView: View): View = {
+    argView.slice(start,end)
   }
 }

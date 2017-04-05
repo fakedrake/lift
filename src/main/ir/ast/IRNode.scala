@@ -30,7 +30,7 @@ object IRNode {
       case l: Lambda => Lambda(l.params.map(visit(_,pre,post).asInstanceOf[Param]),visit(l.body,pre,post).asInstanceOf[Expr])
 
       case Unzip() | Transpose() | TransposeW() | asVector(_) | asScalar() |
-           Split(_) | Join() | Zip(_) | Tuple(_) | Filter() |
+           Split(_) | Join() | Zip(_) | Tuple(_) | Filter() | Slice(_,_) |
            Head() | Tail() | Scatter(_) | Gather(_) | Get(_) | Slide(_, _) | Pad(_,_,_) | Value(_) => nPre // nothing to visit here
 
       case p: Param => nPre // nothing to visit here
@@ -63,7 +63,7 @@ object IRNode {
         visit(l.body,pre,post)
 
       case Unzip() | Transpose() | TransposeW() | asVector(_) | asScalar() |
-           Split(_) | Join() | Zip(_) | Tuple(_) | Filter() |
+           Split(_) | Join() | Zip(_) | Tuple(_) | Filter() | Slice(_,_) |
            Head() | Tail() | Scatter(_) | Gather(_) | Get(_) | Slide(_, _) |
            Pad(_,_,_) | Value(_) | UnsafeArrayAccess(_) =>  // nothing to visit here
 
@@ -103,6 +103,7 @@ object IRNode {
       case a: asScalar => new asScalar()
 
       case s: Split => new Split(f(s.chunkSize))
+      case s: Slice => new Slice(f(s.start), f(s.end))
 
       case s: Scatter => new Scatter(new IndexFunction((ae: ArithExpr, t: Type) => f(s.idx.f.apply(ae, t))))
       case g: Gather => new Gather(new IndexFunction((ae: ArithExpr, t: Type) => f(g.idx.f.apply(ae, t))))
